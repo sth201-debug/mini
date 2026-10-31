@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>구구단 광산</title>
+<style>
+  :root {
+    --panel: rgba(20, 20, 28, 0.88);
+    --text: #f4f4f4;
+    --accent: #5fd35f;
+    --bad: #ff6b6b;
+    --gold: #ffd84a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #111; color: var(--text);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  canvas { display: block; image-rendering: pixelated; }
+  button { font-family: inherit; cursor: pointer; }
+
+  #hud {
+    position: fixed; top: 8px; left: 8px; right: 8px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    pointer-events: none;
+  }
+  .chip {
+    background: var(--panel); padding: 6px 10px; border-radius: 8px;
+    font-size: 15px; font-weight: 700; pointer-events: auto;
+  }
+  #goal { color: var(--gold); }
+  #menuBtn { border: 0; color: var(--text); }
+
+  #hotbar {
+    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; background: var(--panel); padding: 4px; border-radius: 10px;
+  }
+  .slot {
+    width: min(52px, calc((100vw - 60px) / 9)); aspect-ratio: 1; border: 3px solid #555; border-radius: 6px;
+    background: #2a2a33; position: relative; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .slot.sel { border-color: #fff; }
+  .slot canvas { width: 62%; height: 62%; }
+  .slot .cnt {
+    position: absolute; right: 3px; bottom: 1px; font-size: 13px; font-weight: 800;
+    color: #fff; text-shadow: 1px 1px 0 #000;
+  }
+  .slot .icon { font-size: 26px; }
+
+  #touch { position: fixed; bottom: 80px; left: 0; right: 0; display: none; pointer-events: none; }
+  #touch .pad { position: absolute; bottom: 0; display: flex; gap: 10px; pointer-events: auto; }
+  #touch .left { left: 14px; }
+  #touch .right { right: 14px; }
+  #touch button {
+    width: 64px; height: 64px; border-radius: 50%; border: 0;
+    background: rgba(255,255,255,0.22); color: #fff; font-size: 26px; font-weight: 800;
+  }
+  @media (pointer: coarse) { #touch { display: block; } }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay.hidden { display: none; }
+  .card {
+    background: #24242e; border: 4px solid #4a4a58; border-radius: 14px;
+    padding: 20px; width: 100%; max-width: 420px; text-align: center;
+    max-height: 100%; overflow-y: auto;
+  }
+  .card h1 { margin: 0 0 6px; font-size: 30px; color: var(--accent); text-shadow: 3px 3px 0 #000; }
+  .card h2 { margin: 0 0 12px; font-size: 22px; }
+  .card p { margin: 6px 0; line-height: 1.5; color: #ccc; }
+  .big-btn {
+    margin-top: 14px; width: 100%; padding: 14px; font-size: 20px; font-weight: 800;
+    border: 0; border-radius: 10px; background: var(--accent); color: #102010;
+    box-shadow: 0 4px 0 #2e7d2e;
+  }
+  .big-btn.gray { background: #777; color: #fff; box-shadow: 0 4px 0 #444; }
+
+  #danPick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0 4px; }
+  #danPick button {
+    padding: 10px 0; font-size: 18px; font-weight: 800; border-radius: 8px;
+    border: 3px solid #555; background: #333; color: #888;
+  }
+  #danPick button.on { border-color: var(--accent); background: #2f4f2f; color: #fff; }
+  .legend { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 14px; margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 14px; height: 14px; display: inline-block; border-radius: 3px; }
+
+  #question { font-size: 44px; font-weight: 900; margin: 6px 0 10px; letter-spacing: 1px; }
+  #answerBox {
+    font-size: 36px; font-weight: 900; min-height: 56px; padding: 6px;
+    border-radius: 10px; background: #111; margin-bottom: 10px; border: 3px solid #444;
+  }
+  #answerBox.ok { border-color: var(--accent); color: var(--accent); }
+  #answerBox.no { border-color: var(--bad); color: var(--bad); }
+  #feedback { min-height: 24px; font-weight: 800; margin-bottom: 8px; }
+  #numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #numpad button {
+    padding: 12px 0; font-size: 24px; font-weight: 800; border: 0; border-radius: 8px;
+    background: #3a3a48; color: #fff; box-shadow: 0 3px 0 #1c1c24;
+  }
+  #numpad button.go { background: var(--accent); color: #102010; box-shadow: 0 3px 0 #2e7d2e; }
+  #wrongList { text-align: left; margin: 10px 0; font-size: 17px; columns: 2; }
+  #toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); padding: 8px 16px; border-radius: 10px; font-weight: 800;
+    opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="chip">⭐ <span id="score">0</span></div>
+  <div class="chip">🔥 연속 <span id="streak">0</span></div>
+  <div class="chip" id="goal"></div>
+  <button class="chip" id="menuBtn">⏸ 메뉴</button>
+</div>
+
+<div id="hotbar"></div>
+
+<div id="touch">
+  <div class="pad left">
+    <button data-key="left">◀</button>
+    <button data-key="right">▶</button>
+  </div>
+  <div class="pad right">
+    <button data-key="jump">▲</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- 시작 화면 -->
+<div class="overlay" id="startScreen">
+  <div class="card">
+    <h1>⛏ 구구단 광산</h1>
+    <p>땅을 파서 광석을 찾아요!<br>광석에 적힌 <b>단</b>의 구구단 문제를 맞히면 광석을 캘 수 있어요.</p>
+    <p>연습할 단을 골라 주세요</p>
+    <div id="danPick"></div>
+    <div class="legend">
+      <span><i style="background:#222"></i>석탄 2·3단</span>
+      <span><i style="background:#d8a47f"></i>철 4·5단</span>
+      <span><i style="background:#ffd84a"></i>금 6·7단</span>
+      <span><i style="background:#5ff0e6"></i>다이아 8·9단</span>
+    </div>
+    <button class="big-btn" id="startBtn">게임 시작!</button>
+    <p style="font-size:13px;margin-top:12px">
+      이동: ← → 또는 A D · 점프: ↑ W 스페이스<br>
+      블록 클릭: 캐기 · 아래 칸에서 블록을 고른 뒤 클릭: 놓기
+    </p>
+  </div>
+</div>
+
+<!-- 문제 화면 -->
+<div class="overlay hidden" id="quizScreen">
+  <div class="card">
+    <h2 id="quizTitle">광석 발견!</h2>
+    <div id="question"></div>
+    <div id="answerBox"></div>
+    <div id="feedback"></div>
+    <div id="numpad"></div>
+    <button class="big-btn gray" id="quizCancel" style="margin-top:10px">그만두기</button>
+  </div>
+</div>
+
+<!-- 메뉴 화면 -->
+<div class="overlay hidden" id="menuScreen">
+  <div class="card">
+    <h2>⏸ 잠깐 쉬기</h2>
+    <p id="statLine"></p>
+    <div id="wrongWrap">
+      <p><b>다시 볼 문제</b></p>
+      <div id="wrongList"></div>
+    </div>
+    <button class="big-btn" id="resumeBtn">계속하기</button>
+    <button class="big-btn gray" id="newWorldBtn">새 세계 만들기</button>
+  </div>
+</div>
+
+<!-- 승리 화면 -->
+<div class="overlay hidden" id="winScreen">
+  <div class="card">
+    <h1>💎 성공!</h1>
+    <p id="winText"></p>
+    <button class="big-btn" id="winContinue">계속 탐험하기</button>
+    <button class="big-btn gray" id="winNew">새 세계 만들기</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- 블록 정의 ----------
+  const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, WOOD = 4, LEAF = 5, BEDROCK = 6, ORE = 7;
+  const ORE_TIERS = [
+    { name: '석탄', dans: [2, 3], color: '#1d1d1d', points: 1 },
+    { name: '철', dans: [4, 5], color: '#d8a47f', points: 2 },
+    { name: '금', dans: [6, 7], color: '#ffd84a', points: 3 },
+    { name: '다이아몬드', dans: [8, 9], color: '#5ff0e6', points: 5 },
+  ];
+  const tierOfDan = d => ORE_TIERS.findIndex(t => t.dans.includes(d));
+  const BLOCK_NAMES = { [GRASS]: '잔디', [DIRT]: '흙', [STONE]: '돌', [WOOD]: '나무', [LEAF]: '나뭇잎' };
+  const PLACEABLE = [DIRT, STONE, WOOD, LEAF];
+  const GOAL_DIAMONDS = 5;
+
+  // ---------- 상태 ----------
+  const W = 80, H = 48, TILE = 32, REACH = 4.5;
+  let world, oreDan, surface, player, inv, stats, selectedDans, selectedSlot = 0;
+  let paused = true, wonShown = false;
+  const keys = { left: false, right: false, jump: false };
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  function store(key, val) {
+    try {
+      if (val === undefined) return JSON.parse(localStorage.getItem(key));
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) { return null; }
+  }
+
+  // ---------- 세계 만들기 ----------
+  function genWorld() {
+    world = new Uint8Array(W * H);
+    oreDan = new Uint8Array(W * H);
+    surface = [];
+    let h = 14;
+    for (let x = 0; x < W; x++) {
+      h += Math.round((Math.random() - 0.5) * 2.2);
+      h = Math.max(10, Math.min(18, h));
+      surface.push(h);
+    }
+    // 부드럽게
+    for (let pass = 0; pass < 2; pass++)
+      for (let x = 1; x < W - 1; x++)
+        surface[x] = Math.round((surface[x - 1] + surface[x] + surface[x + 1]) / 3);
+
+    const tiersAvailable = ORE_TIERS.map(t => t.dans.filter(d => selectedDans.includes(d)));
+    for (let x = 0; x < W; x++) {
+      const s = surface[x];
+      for (let y = s; y < H; y++) {
+        let b;
+        if (y === H - 1) b = BEDROCK;
+        else if (y === s) b = GRASS;
+        else if (y < s + 4) b = DIRT;
+        else b = STONE;
+        if (b === STONE) {
+          const depth = (y - s) / (H - s);
+          if (Math.random() < 0.07 + depth * 0.05) {
+            // 깊을수록 더 높은 단의 광석
+            let tier = Math.min(3, Math.floor(depth * 4 + (Math.random() - 0.3) * 1.2));
+            tier = Math.max(0, tier);
+            // 고른 단이 없는 등급이면 가까운 등급으로
+            let t = tier, step = 0;
+            while (!tiersAvailable[t].length && step < 8) {
+              step++;
+              t = tier + (step % 2 ? Math.ceil(step / 2) : -step / 2);
+              t = Math.max(0, Math.min(3, t));
+            }
+            const dans = tiersAvailable[t];
+            if (dans.length) {
+              b = ORE;
+              oreDan[y * W + x] = dans[Math.floor(Math.random() * dans.length)];
+            }
+          }
+        }
+        world[y * W + x] = b;
+      }
+    }
+    // 동굴
+    for (let c = 0; c < 10; c++) {
+      let cx = Math.random() * W, cy = 22 + Math.random() * (H - 28);
+      for (let i = 0; i < 30; i++) {
+        cx += (Math.random() - 0.5) * 2; cy += (Math.random() - 0.5) * 1.2;
+        const r = 1 + Math.random() * 1.3;
+        for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+          const x = Math.round(cx + dx), y = Math.round(cy + dy);
+          if (dx * dx + dy * dy <= r * r && inBounds(x, y) && y < H - 1 && get(x, y) === STONE) set(x, y, AIR);
+        }
+      }
+    }
+    // 나무
+    for (let x = 3; x < W - 3; x += 4 + Math.floor(Math.random() * 6)) {
+      const s = surface[x];
+      const th = 3 + Math.floor(Math.random() * 2);
+      for (let i = 1; i <= th; i++) set(x, s - i, WOOD);
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 0; dy++) {
+        if (Math.abs(dx) === 2 && dy === -2) continue;
+        const lx = x + dx, ly = s - th - 1 + dy;
+        if (inBounds(lx, ly) && get(lx, ly) === AIR) set(lx, ly, LEAF);
+      }
+      set(x, s - th - 1, LEAF);
+    }
+    const sx = Math.floor(W / 2);
+    player = { x: sx + 0.1, y: surface[sx] - 2, vx: 0, vy: 0, w: 0.75, h: 1.75, onGround: false, face: 1 };
+    // 시작 지점 주변 비우기
+    for (let y = surface[sx] - 3; y < surface[sx]; y++) for (let x = sx - 1; x <= sx + 1; x++) set(x, y, AIR);
+    inv = { [DIRT]: 0, [STONE]: 0, [WOOD]: 0, [LEAF]: 0 };
+    ORE_TIERS.forEach((_, i) => inv['ore' + i] = 0);
+    // 틀린 문제는 새 세계에서도 이어서 다시 낸다
+    stats = { score: 0, streak: 0, best: 0, correct: 0, wrong: 0, wrongs: store('gugudan-wrongs') || {} };
+    wonShown = false;
+    selectedSlot = 0;
+    buildHotbar();
+    updateHud();
+  }
+
+  const inBounds = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const get = (x, y) => inBounds(x, y) ? world[y * W + x] : (y >= H ? BEDROCK : AIR);
+  const set = (x, y, b) => { if (inBounds(x, y)) world[y * W + x] = b; };
+  const solid = (x, y) => get(x, y) !== AIR;
+  const isSideWall = x => x < 0 || x >= W;
+
+  // ---------- 블록 그림 ----------
+  const texCache = {};
+  function hash(x, y, s) {
+    let n = x * 374761393 + y * 668265263 + s * 2147483647;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  }
+  function makeTex(key, draw) {
+    if (texCache[key]) return texCache[key];
+    const c = document.createElement('canvas');
+    c.width = c.height = 16;
+    draw(c.getContext('2d'));
+    return texCache[key] = c;
+  }
+  function noisy(g, base, vary, seed) {
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const r = hash(x, y, seed);
+      g.fillStyle = r < 0.33 ? vary[0] : r < 0.66 ? base : vary[1];
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  function tex(b, tier) {
+    switch (b) {
+      case GRASS: return makeTex('g', g => {
+        noisy(g, '#8b5a2b', ['#7a4e24', '#9a6633'], 1);
+        for (let x = 0; x < 16; x++) {
+          const d = 3 + Math.floor(hash(x, 0, 9) * 3);
+          for (let y = 0; y < d; y++) { g.fillStyle = hash(x, y, 2) < 0.5 ? '#5fb83a' : '#4fa52e'; g.fillRect(x, y, 1, 1); }
+        }
+      });
+      case DIRT: return makeTex('d', g => noisy(g, '#8b5a2b', ['#7a4e24', '#9a6633'], 1));
+      case STONE: return makeTex('s', g => noisy(g, '#8a8a8a', ['#7a7a7a', '#9a9a9a'], 3));
+      case BEDROCK: return makeTex('b', g => noisy(g, '#3a3a3a', ['#1e1e1e', '#555'], 4));
+      case WOOD: return makeTex('w', g => {
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+          g.fillStyle = (x % 5 === 0 || hash(x, y, 5) < 0.15) ? '#5a3d1e' : '#7a5530';
+          g.fillRect(x, y, 1, 1);
+        }
+      });
+      case LEAF: return makeTex('l', g => {
+        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+          const r = hash(x, y, 6);
+          g.fillStyle = r < 0.15 ? '#1f5e1a' : r < 0.6 ? '#3c8f2f' : '#2f7a25';
+          g.fillRect(x, y, 1, 1);
+        }
+      });
+      case ORE: return makeTex('o' + tier, g => {
+        noisy(g, '#8a8a8a', ['#7a7a7a', '#9a9a9a'], 3);
+        const col = ORE_TIERS[tier].color;
+        const spots = [[3, 3], [10, 2], [6, 7], [12, 9], [2, 11], [8, 12]];
+        for (const [sx, sy] of spots) {
+          g.fillStyle = col; g.fillRect(sx, sy, 3, 2); g.fillRect(sx + 1, sy - 1, 1, 1);
+          g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(sx, sy, 1, 1);
+        }
+      });
+    }
+  }
+
+  // ---------- 화면 ----------
+  let cam = { x: 0, y: 0 }, dpr = 1;
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+    canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  let hover = null;
+  function draw() {
+    const vw = innerWidth, vh = innerHeight;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    // 하늘 (깊이 들어가면 어두워짐)
+    const depth = Math.max(0, Math.min(1, (player.y - 16) / 20));
+    const sky = ctx.createLinearGradient(0, 0, 0, vh);
+    sky.addColorStop(0, mix('#6db8ff', '#101018', depth));
+    sky.addColorStop(1, mix('#bfe3ff', '#18181f', depth));
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, vw, vh);
+
+    cam.x = player.x * TILE - vw / 2 + player.w * TILE / 2;
+    cam.y = player.y * TILE - vh / 2 + player.h * TILE / 2;
+    cam.x = Math.max(0, Math.min(W * TILE - vw, cam.x));
+    cam.y = Math.max(-TILE * 6, Math.min(H * TILE - vh, cam.y));
+    if (W * TILE < vw) cam.x = (W * TILE - vw) / 2;
+
+    const x0 = Math.floor(cam.x / TILE), y0 = Math.floor(cam.y / TILE);
+    const x1 = Math.ceil((cam.x + vw) / TILE), y1 = Math.ceil((cam.y + vh) / TILE);
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const b = get(x, y);
+      const px = Math.round(x * TILE - cam.x), py = Math.round(y * TILE - cam.y);
+      if (b === AIR) {
+        // 땅속 빈 곳은 어두운 동굴 벽으로
+        if (inBounds(x, y) && y > surface[x]) {
+          ctx.drawImage(tex(STONE), px, py, TILE, TILE);
+          ctx.fillStyle = 'rgba(10,10,16,0.72)';
+          ctx.fillRect(px, py, TILE, TILE);
+        }
+        continue;
+      }
+      if (b === ORE) {
+        const dan = oreDan[y * W + x];
+        ctx.drawImage(tex(ORE, tierOfDan(dan)), px, py, TILE, TILE);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(px + 8, py + 8, 16, 16);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(dan, px + 16, py + 17);
+      } else {
+        ctx.drawImage(tex(b), px, py, TILE, TILE);
+      }
+    }
+    // 선택 표시
+    if (hover && !paused) {
+      const px = hover.x * TILE - cam.x, py = hover.y * TILE - cam.y;
+      ctx.strokeStyle = hover.ok ? 'rgba(255,255,255,0.9)' : 'rgba(255,80,80,0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    }
+    drawPlayer();
+  }
+
+  function drawPlayer() {
+    const px = player.x * TILE - cam.x, py = player.y * TILE - cam.y;
+    const w = player.w * TILE, h = player.h * TILE;
+    const f = player.face;
+    const walk = Math.abs(player.vx) > 0.5 && player.onGround ? Math.sin(performance.now() / 80) * 4 : 0;
+    // 다리
+    ctx.fillStyle = '#3b3b9a';
+    ctx.fillRect(px + 3, py + h * 0.62, w / 2 - 3, h * 0.38 + walk * 0.3);
+    ctx.fillRect(px + w / 2, py + h * 0.62, w / 2 - 3, h * 0.38 - walk * 0.3);
+    // 몸
+    ctx.fillStyle = '#2fa8a8';
+    ctx.fillRect(px, py + h * 0.3, w, h * 0.34);
+    // 팔
+    ctx.fillStyle = '#c9946b';
+    ctx.fillRect(f > 0 ? px + w - 5 : px, py + h * 0.32 + walk, 5, h * 0.3);
+    // 머리
+    ctx.fillStyle = '#c9946b';
+    ctx.fillRect(px + 1, py, w - 2, h * 0.3);
+    ctx.fillStyle = '#4a2f1b';
+    ctx.fillRect(px + 1, py, w - 2, h * 0.08);
+    // 눈
+    ctx.fillStyle = '#fff';
+    const ex = f > 0 ? px + w * 0.55 : px + w * 0.15;
+    ctx.fillRect(ex, py + h * 0.13, 5, 4);
+    ctx.fillStyle = '#3a2bb0';
+    ctx.fillRect(ex + (f > 0 ? 3 : 0), py + h * 0.13, 2, 4);
+  }
+
+  function mix(a, b, t) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const r = Math.round(((pa >> 16) & 255) * (1 - t) + ((pb >> 16) & 255) * t);
+    const g = Math.round(((pa >> 8) & 255) * (1 - t) + ((pb >> 8) & 255) * t);
+    const bl = Math.round((pa & 255) * (1 - t) + (pb & 255) * t);
+    return `rgb(${r},${g},${bl})`;
+  }
+
+  // ---------- 물리 ----------
+  function collides(x, y) {
+    for (let ty = Math.floor(y); ty <= Math.floor(y + player.h - 0.001); ty++)
+      for (let tx = Math.floor(x); tx <= Math.floor(x + player.w - 0.001); tx++)
+        if (isSideWall(tx) || solid(tx, ty)) return true;
+    return false;
+  }
+
+  function step(dt) {
+    const speed = 5.5;
+    const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    player.vx = dir * speed;
+    if (dir) player.face = dir;
+    if (keys.jump && player.onGround) { player.vy = -9.2; player.onGround = false; }
+    player.vy = Math.min(player.vy + 26 * dt, 18);
+
+    // 가로 이동 (한 칸 턱은 자동으로 오르기)
+    let nx = player.x + player.vx * dt;
+    if (collides(nx, player.y)) {
+      if (player.onGround && !collides(nx, player.y - 1.01) && !collides(player.x, player.y - 1.01)) {
+        player.y -= 1.01;
+      } else {
+        nx = player.vx > 0 ? Math.floor(nx + player.w) - player.w - 0.001 : Math.floor(nx) + 1.001;
+        if (collides(nx, player.y)) nx = player.x;
+        player.vx = 0;
+      }
+    }
+    player.x = nx;
+
+    // 세로 이동
+    let ny = player.y + player.vy * dt;
+    player.onGround = false;
+    if (collides(player.x, ny)) {
+      if (player.vy > 0) { ny = Math.floor(ny + player.h) - player.h - 0.001; player.onGround = true; }
+      else ny = Math.floor(ny) + 1.001;
+      if (collides(player.x, ny)) ny = player.y;
+      player.vy = 0;
+    }
+    player.y = ny;
+  }
+
+  // ---------- 캐기와 놓기 ----------
+  function tileAt(clientX, clientY) {
+    const x = Math.floor((clientX + cam.x) / TILE), y = Math.floor((clientY + cam.y) / TILE);
+    const cx = player.x + player.w / 2, cy = player.y + player.h * 0.35;
+    const ok = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= REACH && inBounds(x, y);
+    return { x, y, ok };
+  }
+
+  function overlapsPlayer(x, y) {
+    return x + 1 > player.x && x < player.x + player.w && y + 1 > player.y && y < player.y + player.h;
+  }
+
+  function useTile(t) {
+    if (!t.ok || paused) return;
+    const b = get(t.x, t.y);
+    const slot = hotbarSlots[selectedSlot];
+    if (slot.type === 'place' && b === AIR) {
+      if (inv[slot.block] > 0 && !overlapsPlayer(t.x, t.y)) {
+        set(t.x, t.y, slot.block); inv[slot.block]--; buildHotbar();
+      } else if (inv[slot.block] <= 0) toast(`${BLOCK_NAMES[slot.block]} 블록이 없어요`);
+      return;
+    }
+    if (b === AIR) return;
+    if (b === BEDROCK) { toast('기반암은 캘 수 없어요'); return; }
+    if (b === ORE) { openQuiz(t.x, t.y); return; }
+    set(t.x, t.y, AIR);
+    const got = b === GRASS ? DIRT : b;
+    inv[got] = (inv[got] || 0) + 1;
+    buildHotbar();
+  }
+
+  canvas.addEventListener('pointermove', e => { hover = tileAt(e.clientX, e.clientY); });
+  canvas.addEventListener('pointerdown', e => {
+    hover = tileAt(e.clientX, e.clientY);
+    useTile(hover);
+  });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ---------- 아래 칸(핫바) ----------
+  let hotbarSlots = [];
+  function buildHotbar() {
+    hotbarSlots = [{ type: 'mine' }, ...PLACEABLE.map(b => ({ type: 'place', block: b }))];
+    const bar = $('hotbar');
+    bar.innerHTML = '';
+    hotbarSlots.forEach((s, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'slot' + (i === selectedSlot ? ' sel' : '');
+      if (s.type === 'mine') {
+        btn.innerHTML = '<span class="icon">⛏</span>';
+        btn.title = '곡괭이 (1)';
+      } else {
+        const c = document.createElement('canvas');
+        c.width = c.height = 16;
+        c.getContext('2d').drawImage(tex(s.block), 0, 0);
+        btn.appendChild(c);
+        const cnt = document.createElement('span');
+        cnt.className = 'cnt'; cnt.textContent = inv[s.block];
+        btn.appendChild(cnt);
+        btn.title = `${BLOCK_NAMES[s.block]} (${i + 1})`;
+      }
+      btn.addEventListener('pointerdown', e => { e.stopPropagation(); selectedSlot = i; buildHotbar(); });
+      bar.appendChild(btn);
+    });
+    // 광석 보관함
+    ORE_TIERS.forEach((t, i) => {
+      const box = document.createElement('div');
+      box.className = 'slot';
+      box.style.borderColor = '#333';
+      box.title = t.name;
+      const c = document.createElement('canvas');
+      c.width = c.height = 16;
+      c.getContext('2d').drawImage(tex(ORE, i), 0, 0);
+      box.appendChild(c);
+      const cnt = document.createElement('span');
+      cnt.className = 'cnt'; cnt.textContent = inv['ore' + i];
+      box.appendChild(cnt);
+      bar.appendChild(box);
+    });
+  }
+
+  // ---------- 구구단 문제 ----------
+  let quiz = null;
+  function openQuiz(x, y) {
+    const dan = oreDan[y * W + x];
+    const tier = tierOfDan(dan);
+    // 틀렸던 문제가 있으면 그 문제를 먼저 다시 낸다
+    const retry = Object.keys(stats.wrongs).map(k => k.split('x').map(Number)).filter(([a]) => a === dan);
+    const n = retry.length && Math.random() < 0.6
+      ? retry[Math.floor(Math.random() * retry.length)][1]
+      : 1 + Math.floor(Math.random() * 9);
+    quiz = { x, y, dan, n, tier, input: '', done: false };
+    paused = true; keys.left = keys.right = keys.jump = false;
+    $('quizTitle').textContent = `${ORE_TIERS[tier].name} 광석 발견!`;
+    $('quizTitle').style.color = tier === 0 ? '#ddd' : ORE_TIERS[tier].color;
+    $('question').textContent = `${dan} × ${n} = ?`;
+    $('feedback').textContent = '';
+    renderAnswer();
+    $('quizScreen').classList.remove('hidden');
+  }
+
+  function renderAnswer(state) {
+    const box = $('answerBox');
+    box.textContent = quiz.input || ' ';
+    box.className = state || '';
+  }
+
+  function quizKey(k) {
+    if (!quiz || quiz.done) return;
+    if (k === 'back') quiz.input = quiz.input.slice(0, -1);
+    else if (k === 'ok') return submitQuiz();
+    else if (quiz.input.length < 3) quiz.input += k;
+    renderAnswer();
+  }
+
+  function submitQuiz() {
+    if (!quiz.input) return;
+    const ans = quiz.dan * quiz.n;
+    const key = `${quiz.dan}x${quiz.n}`;
+    quiz.done = true;
+    if (Number(quiz.input) === ans) {
+      stats.correct++; stats.streak++;
+      stats.best = Math.max(stats.best, stats.streak);
+      const bonus = stats.streak >= 5 ? 2 : 1;
+      stats.score += ORE_TIERS[quiz.tier].points * bonus;
+      delete stats.wrongs[key];
+      inv['ore' + quiz.tier]++;
+      set(quiz.x, quiz.y, AIR);
+      renderAnswer('ok');
+      $('feedback').style.color = 'var(--accent)';
+      $('feedback').textContent = bonus > 1 ? `정답! 🔥 ${stats.streak}연속 보너스 ×2` : '정답! 광석을 캤어요';
+      setTimeout(closeQuiz, 800);
+    } else {
+      stats.wrong++; stats.streak = 0;
+      stats.wrongs[key] = (stats.wrongs[key] || 0) + 1;
+      renderAnswer('no');
+      $('feedback').style.color = 'var(--bad)';
+      $('feedback').textContent = `아쉬워요! ${quiz.dan} × ${quiz.n} = ${ans}`;
+      setTimeout(closeQuiz, 1800);
+    }
+    buildHotbar(); updateHud(); save();
+  }
+
+  function closeQuiz() {
+    $('quizScreen').classList.add('hidden');
+    quiz = null; paused = false;
+    if (!wonShown && inv.ore3 >= GOAL_DIAMONDS && selectedDans.some(d => d >= 8)) showWin();
+  }
+
+  (function buildNumpad() {
+    const pad = $('numpad');
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok'].forEach(k => {
+      const b = document.createElement('button');
+      b.textContent = k === 'back' ? '⌫' : k === 'ok' ? '확인' : k;
+      if (k === 'ok') b.className = 'go';
+      b.addEventListener('pointerdown', e => { e.preventDefault(); quizKey(k); });
+      pad.appendChild(b);
+    });
+  })();
+  $('quizCancel').addEventListener('click', () => { if (quiz && !quiz.done) closeQuiz(); });
+
+  // ---------- 화면 위 정보 ----------
+  function goalText() {
+    if (selectedDans.some(d => d >= 8)) return `💎 다이아몬드 ${inv.ore3} / ${GOAL_DIAMONDS}`;
+    return `맞힌 문제 ${stats.correct}개`;
+  }
+  function updateHud() {
+    $('score').textContent = stats.score;
+    $('streak').textContent = stats.streak;
+    $('goal').textContent = goalText();
+  }
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => t.classList.remove('show'), 1400);
+  }
+
+  function showWin() {
+    wonShown = true; paused = true;
+    const total = stats.correct + stats.wrong;
+    $('winText').innerHTML = `다이아몬드 ${GOAL_DIAMONDS}개를 모았어요!<br>` +
+      `맞힌 문제 ${stats.correct} / ${total} · 최고 연속 ${stats.best}번 · 점수 ${stats.score}`;
+    $('winScreen').classList.remove('hidden');
+  }
+  $('winContinue').addEventListener('click', () => { $('winScreen').classList.add('hidden'); paused = false; });
+  $('winNew').addEventListener('click', () => { $('winScreen').classList.add('hidden'); showStart(); });
+
+  // ---------- 메뉴 ----------
+  function openMenu() {
+    if (quiz) return;
+    paused = true;
+    const total = stats.correct + stats.wrong;
+    const rate = total ? Math.round(stats.correct / total * 100) : 0;
+    $('statLine').textContent = `맞힘 ${stats.correct} · 틀림 ${stats.wrong} · 정답률 ${rate}% · 최고 연속 ${stats.best}`;
+    const wrongs = Object.keys(stats.wrongs).sort((a, b) => {
+      const [a1, a2] = a.split('x').map(Number), [b1, b2] = b.split('x').map(Number);
+      return a1 - b1 || a2 - b2;
+    });
+    $('wrongWrap').style.display = wrongs.length ? '' : 'none';
+    $('wrongList').innerHTML = wrongs.map(k => {
+      const [a, b] = k.split('x').map(Number);
+      return `<div>${a} × ${b} = <b>${a * b}</b></div>`;
+    }).join('');
+    $('menuScreen').classList.remove('hidden');
+  }
+  $('menuBtn').addEventListener('click', openMenu);
+  $('resumeBtn').addEventListener('click', () => { $('menuScreen').classList.add('hidden'); paused = false; });
+  $('newWorldBtn').addEventListener('click', () => { $('menuScreen').classList.add('hidden'); showStart(); });
+
+  // ---------- 시작 화면 ----------
+  selectedDans = store('gugudan-dans') || [2, 3, 4, 5, 6, 7, 8, 9];
+  function renderDanPick() {
+    const box = $('danPick');
+    box.innerHTML = '';
+    for (let d = 2; d <= 9; d++) {
+      const b = document.createElement('button');
+      b.textContent = d + '단';
+      b.className = selectedDans.includes(d) ? 'on' : '';
+      b.addEventListener('click', () => {
+        if (selectedDans.includes(d)) {
+          if (selectedDans.length > 1) selectedDans = selectedDans.filter(x => x !== d);
+        } else selectedDans = [...selectedDans, d].sort();
+        renderDanPick();
+      });
+      box.appendChild(b);
+    }
+  }
+  function showStart() {
+    paused = true;
+    renderDanPick();
+    $('startScreen').classList.remove('hidden');
+  }
+  $('startBtn').addEventListener('click', () => {
+    store('gugudan-dans', selectedDans);
+    genWorld();
+    $('startScreen').classList.add('hidden');
+    paused = false;
+    toast('블록을 눌러서 땅을 파 보세요!');
+  });
+
+  function save() {
+    store('gugudan-wrongs', stats.wrongs);
+  }
+
+  // ---------- 키보드 ----------
+  const keyMap = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'jump', KeyW: 'jump', Space: 'jump' };
+  addEventListener('keydown', e => {
+    if (quiz) {
+      if (/^[0-9]$/.test(e.key)) quizKey(e.key);
+      else if (e.key === 'Backspace') quizKey('back');
+      else if (e.key === 'Enter') quizKey('ok');
+      else if (e.key === 'Escape' && !quiz.done) closeQuiz();
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Escape') { $('menuScreen').classList.contains('hidden') ? openMenu() : $('resumeBtn').click(); return; }
+    if (!paused && /^Digit[1-5]$/.test(e.code)) { selectedSlot = Number(e.code.slice(5)) - 1; buildHotbar(); }
+    if (keyMap[e.code]) { keys[keyMap[e.code]] = true; e.preventDefault(); }
+  });
+  addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = false; });
+  addEventListener('blur', () => { keys.left = keys.right = keys.jump = false; });
+
+  document.querySelectorAll('#touch button').forEach(b => {
+    const k = b.dataset.key;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); keys[k] = true; });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => b.addEventListener(ev, () => { keys[k] = false; }));
+  });
+
+  // ---------- 반복 ----------
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    if (!paused && world) step(dt);
+    if (world) draw();
+    requestAnimationFrame(loop);
+  }
+
+  // 시작 화면 뒤에 보일 배경 세계
+  genWorld();
+  showStart();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
